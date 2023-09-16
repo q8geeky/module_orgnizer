@@ -96,15 +96,15 @@ class CivitaiOrganizer:
                 try:
                     headers = {"Authorization": f"Bearer {api_key}"}
                     response = requests.get(f"https://civitai.com/api/v1/models?name={module_file}", headers=headers)
-                    if response.status_code == 200:
+                    if response.status_code < 400:  # Check for successful status codes
                         content = response.json()
-                        if 'type' in content:
-                            temp_file.write(json.dumps(content) + "\n")
-                        else:
-                             # Handle cases where 'type' might not be present
+                        if 'data' in content and 'type' in content['data']:  # Corrected extraction of 'type'
+                            temp_file.write(content['data']['type'] + "\n")
+                       else:
                             self.output_text.insert("end", f"Module {module_file} not recognized or deprecated.\n")
-                    else:
-                         self.output_text.insert("end", f"Error fetching API response for {module_file}: {response.status_code}\n")
+                   else:
+                       self.output_text.insert("end", f"Error fetching API response for {module_file}: {response.status_code}\n")
+
                 except Exception as e:
                     self.output_text.insert("end", f"Error fetching API response for {module_file}: {str(e)}\n")
 
@@ -115,11 +115,19 @@ class CivitaiOrganizer:
         # Optional: Add a delay (not necessary but can be added for safety)
         # time.sleep(1)
         # Read API responses and move files
-        responses = []
         if os.path.exists(temp_file_path):
             with open(temp_file_path, "r", encoding="utf-8") as temp_file:
-                lines = temp_file.readlines()
-                for idx, line in enumerate(lines):
+                module_types = temp_file.readlines()
+                for idx, module_type in enumerate(module_types):
+                    module_type = module_type.strip()
+                    if module_type in ["checkpoint", "embedding", "lora", "lycoris", "vae"]:
+                        subfolder_path = os.path.join(folder_path, module_type)
+                        if not os.path.exists(subfolder_path):
+                            os.makedirs(subfolder_path)
+                        os.rename(os.path.join(folder_path, module_files[idx]), os.path.join(subfolder_path, module_files[idx]))
+                        self.output_text.insert("end", f"Moved {module_files[idx]} to {subfolder_path}\n")
+                        self.output_text.see("end")  # Auto-scroll
+
                     self.output_text.insert("end", f"Reading response for module: {module_files[idx]}\n")
                     self.output_text.see("end")
                     self.master.update()
