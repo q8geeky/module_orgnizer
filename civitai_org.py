@@ -78,9 +78,7 @@ class CivitaiOrganizer:
             return
 
         # Verify API Key
-        headers = {"Authorization": f"Bearer {api_key}"}
-        test_response = requests.get("https://civitai.com/api/v1/models", headers=headers)
-
+        test_response = requests.get("https://civitai.com/api/v1/models", headers={"Authorization": f"Bearer {api_key}"})
         if test_response.status_code != 200:
             messagebox.showerror("Error", "Invalid API Key!")
             return
@@ -97,21 +95,15 @@ class CivitaiOrganizer:
 
                 try:
                     headers = {"Authorization": f"Bearer {api_key}"}
-                    try:
-                        response = requests.get(f"https://civitai.com/api/v1/models?name={module_file}", headers=headers)
-                        response.raise_for_status()
-                    except requests.exceptions.RequestException as e:
-                        self.output_text.insert("end", f"Error fetching API response for {module_file}: {str(e)}\n")
-
-                    if response.status_code < 400:
+                    response = requests.get(f"https://civitai.com/api/v1/models?name={module_file}", headers=headers)
+                    if response.status_code < 400:  # Check for successful status codes
                         content = response.json()
-                        if 'data' in content and 'type' in content['data']:
+                        if 'data' in content and 'type' in content['data']:  # Corrected extraction of 'type'
                             temp_file.write(content['data']['type'] + "\n")
                         else:
                             self.output_text.insert("end", f"Module {module_file} not recognized or deprecated.\n")
                     else:
-                        self.output_text.insert("end", f"Error fetching API response for {module_file}: {response.status_code}\n")
-
+                       self.output_text.insert("end", f"Error fetching API response for {module_file}: {response.status_code}\n")
 
                 except Exception as e:
                     self.output_text.insert("end", f"Error fetching API response for {module_file}: {str(e)}\n")
