@@ -50,21 +50,21 @@ class CivitaiOrganizer:
         self.folder_path = filedialog.askdirectory()
         self.label_path.config(text=self.folder_path)
 
-    async def get_module_type(self, module_name):
+    def get_module_type(self, module_name):
         url = f"https://api.civitai.com/module/{module_name}"
         headers = {"Authorization": f"Bearer {self.api_key}"}
-        response = cloudscraper.create_scraper().get(url, headers=headers)
+        response = requests.get(url, headers=headers)
         if response.status_code == 200:
             return response.json().get('type')
         else:
             return None
 
-    async def organize(self):
+    def organize(self):
         self.api_key = self.api_key_entry.get()
         for root, dirs, files in os.walk(self.folder_path):
             for file in files:
                 if file.endswith(('.safetensors', '.safemodel', '.safeparams')):
-                    module_type = await self.get_module_type(file)
+                    module_type = self.get_module_type(file)
                     if module_type:
                         dest_folder = os.path.join(self.folder_path, module_type)
                         if not os.path.exists(dest_folder):
