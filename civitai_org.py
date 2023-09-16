@@ -67,7 +67,6 @@ class CivitaiOrganizer:
         folder_selected = filedialog.askdirectory()
         self.folder_entry.delete(0, "end")
         self.folder_entry.insert(0, folder_selected)
-
     
     def organize_modules(self):
         api_key = self.api_key_entry.get()
@@ -131,9 +130,9 @@ class CivitaiOrganizer:
                     self.output_text.insert("end", f"Reading response for module: {module_files[idx]}\n")
                     self.output_text.see("end")
                     self.master.update()
-
+                    
                     try:
-                        # Use json.loads instead of eval
+                       # Use json.loads instead of eval
                         content = json.loads(line.strip())
                         responses.append(content)
                     except Exception as e:
@@ -151,8 +150,7 @@ class CivitaiOrganizer:
                     os.rename(os.path.join(folder_path, module_file), os.path.join(subfolder_path, module_file))
                     self.output_text.insert("end", f"Moved {module_file} to {subfolder_path}\n")
                     self.output_text.see("end")  # Auto-scroll
-
-
+                    
 if __name__ == "__main__":
     root = Tk()
     app = CivitaiOrganizer(root)
