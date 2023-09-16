@@ -1,6 +1,7 @@
 import os
 import requests
 import json
+import shutil
 import time
 import cloudscraper
 from tkinter import Tk, Label, Button, Entry, filedialog, messagebox, Toplevel, Scrollbar, Text, Y, Frame, StringVar
@@ -10,53 +11,67 @@ class CivitaiOrganizer:
     def __init__(self, master):
         self.master = master
         master.title("Civitai Module Organizer")
-
-        self.api_key_label = Label(master, text="Enter Civitai API Key:")
-        self.api_key_label.pack()
-
-        self.api_key_var = StringVar()
-        self.api_key_var.trace("w", self.mask_api_key)
-        self.api_key_entry = Entry(master, textvariable=self.api_key_var, show="*")
+        self.label = Label(master, text="Enter Civitai API Key:")
+        self.label.pack()
+        self.api_key_entry = Entry(master)
         self.api_key_entry.pack()
-
-        self.folder_label = Label(master, text="Specify 'modules' folder:")
-        self.folder_label.pack()
-
-        self.folder_entry = Entry(master)
-        self.folder_entry.pack()
-
-        self.browse_button = Button(master, text="Browse", command=self.browse_folder)
-        self.browse_button.pack()
-
-        self.organize_button = Button(master, text="Organize Modules", command=self.organize_modules)
+        self.label_path = Label(master, text="Select 'modules' folder:")
+        self.label_path.pack()
+        self.path_button = Button(master, text="Browse", command=self.load_path)
+        self.path_button.pack()
+        self.organize_button = Button(master, text="Organize Modules", command=self.organize)
         self.organize_button.pack()
-
+        self.close_button = Button(master, text="Close", command=master.quit)
+        self.close_button.pack()
         self.progress_frame = Frame(master)
         self.progress_frame.pack(pady=20)
-
         # Scanning Progress Bar
         self.progress_label1 = Label(self.progress_frame, text="Scanning Progress:")
         self.progress_label1.pack()
         self.progress = Progressbar(self.progress_frame, orient="horizontal", length=300, mode="determinate")
         self.progress.pack()
-
         # Reading Temp File Progress Bar
         self.progress_label3 = Label(self.progress_frame, text="Reading Temp File Progress:")
         self.progress_label3.pack()
         self.progress_read = Progressbar(self.progress_frame, orient="horizontal", length=300, mode="determinate")
         self.progress_read.pack()
-
         # Moving Progress Bar
         self.progress_label2 = Label(self.progress_frame, text="Moving Progress:")
         self.progress_label2.pack()
         self.progress_move = Progressbar(self.progress_frame, orient="horizontal", length=300, mode="determinate")
         self.progress_move.pack()
-
         self.output_text = Text(master, height=10, width=50)
         self.output_text.pack(pady=20)
         self.scroll = Scrollbar(master, command=self.output_text.yview)
         self.scroll.pack(side="right", fill="y")
         self.output_text.configure(yscrollcommand=self.scroll.set)
+
+    def load_path(self):
+        self.folder_path = filedialog.askdirectory()
+        self.label_path.config(text=self.folder_path)
+
+    async def get_module_type(self, module_name):
+        url = f"https://api.civitai.com/module/{module_name}"
+        headers = {"Authorization": f"Bearer {self.api_key}"}
+        response = cloudscraper.create_scraper().get(url, headers=headers)
+        if response.status_code == 200:
+            return response.json().get('type')
+        else:
+            return None
+
+    async def organize(self):
+        self.api_key = self.api_key_entry.get()
+        for root, dirs, files in os.walk(self.folder_path):
+            for file in files:
+                if file.endswith(('.safetensors', '.safemodel', '.safeparams')):
+                    module_type = await self.get_module_type(file)
+                    if module_type:
+                        dest_folder = os.path.join(self.folder_path, module_type)
+                        if not os.path.exists(dest_folder):
+                            os.makedirs(dest_folder)
+                        shutil.move(os.path.join(root, file), os.path.join(dest_folder, file))
+                    else:
+                        print(f"Module {file} not recognized or deprecated.")
 
     def mask_api_key(self, *args):
         if self.api_key_entry.focus_get() != self.api_key_entry:  # Mask only when focus is out
