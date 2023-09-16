@@ -2,6 +2,7 @@ import os
 import requests
 import json
 import time
+import cloudscraper
 from tkinter import Tk, Label, Button, Entry, filedialog, messagebox, Toplevel, Scrollbar, Text, Y, Frame, StringVar
 from tkinter.ttk import Progressbar
 
@@ -95,8 +96,7 @@ class CivitaiOrganizer:
                 try:
                     headers = {"Authorization": f"Bearer {api_key}"}
                     response = requests.get(f"https://civitai.com/api/v1/models?name={module_file}", headers=headers)
-                    headers = {"Authorization": f"Bearer {api_key}"}
-                    response = requests.get(f"https://civitai.com/api/v1/models?name={module_file}", headers=headers)
+            
                     if response.status_code < 400:  # Check for successful status codes
                         content = response.json()
                         if 'data' in content and 'type' in content['data']:  # Corrected extraction of 'type'
@@ -143,19 +143,6 @@ class CivitaiOrganizer:
 
                     self.progress_read["value"] = (idx + 1) / len(module_files) * 100
                     self.master.update()
-            
-            if os.path.exists(temp_file_path):
-                with open(temp_file_path, "r", encoding="utf-8") as temp_file:
-                    module_types = temp_file.readlines()
-                    for idx, module_type in enumerate(module_types):
-                        module_type = module_type.strip()
-                        if module_type in ["checkpoint", "embedding", "lora", "lycoris", "vae"]:
-                            subfolder_path = os.path.join(folder_path, module_type)
-                            if not os.path.exists(subfolder_path):
-                                os.makedirs(subfolder_path)
-                            os.rename(os.path.join(folder_path, module_files[idx]), os.path.join(subfolder_path, module_files[idx]))
-                            self.output_text.insert("end", f"Moved {module_files[idx]} to {subfolder_path}\n")
-                            self.output_text.see("end")  # Auto-scroll
 
 if __name__ == "__main__":
     root = Tk()
