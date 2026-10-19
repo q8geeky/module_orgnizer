@@ -44,5 +44,57 @@ class OrganizerTests(unittest.TestCase):
             self.assertEqual(unique_destination(p,"file.pt").name,"file_1.pt")
 
 
+    def test_recursive_preview_preserves_subfolder(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td)
+            inner=root/"models"/"latest"
+            inner.mkdir(parents=True)
+            (inner/"a.safetensors").write_bytes(b"model")
+            events=[]
+            result=organize(root,dry_run=True,recursive=True,
+                            resolver=lambda digest:"Checkpoint",on_progress=events.append)
+            self.assertEqual(result["planned"],1)
+            self.assertFalse((root/"Checkpoint").exists())
+            self.assertIn("Checkpoint",events[0][-1])
+            self.assertIn("models",events[0][-1])
+
+    def test_recursive_apply_does_not_reprocess_classified_folders(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td)
+            source=root/"models"
+            source.mkdir()
+            (source/"model.bin").write_bytes(b"data")
+            (root/"LORA").mkdir()
+            (root/"LORA"/"already.bin").write_bytes(b"old")
+            result=organize(root,dry_run=False,recursive=True,
+                            resolver=lambda digest:"LORA")
+            self.assertEqual(result["moved"],1)
+            self.assertEqual((root/"LORA"/"models"/"model.bin").read_bytes(),b"data")
+            self.assertEqual((root/"LORA"/"already.bin").read_bytes(),b"old")
+            again=organize(root,dry_run=False,recursive=True,offline=True)
+            self.assertEqual(again["found"],0)
+
+    def test_offline_skips_unknown_without_resolver(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td)
+            (root/"first.ckpt").write_bytes(b"data")
+            def fail_resolver(digest):
+                raise AssertionError("offline must never access the network")
+            report=organize(root,dry_run=True,offline=True,resolver=fail_resolver)
+            self.assertEqual(report["unresolved"],1)
+
+    def test_recursive_symlink_directory_is_never_followed(self):
+        with tempfile.TemporaryDirectory() as td, tempfile.TemporaryDirectory() as outside:
+            root=Path(td)
+            (Path(outside)/"model.bin").write_bytes(b"outside")
+            try:
+                (root/"link").symlink_to(outside,target_is_directory=True)
+            except (OSError, NotImplementedError):
+                self.skipTest("No symlink privileges")
+            result=organize(root,dry_run=True,recursive=True,
+                            resolver=lambda digest:"LORA")
+            self.assertEqual(result["found"],0)
+
+
 if __name__=="__main__":
     unittest.main()

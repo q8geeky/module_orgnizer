@@ -14,6 +14,8 @@ def main():
     root.minsize(680,460)
     folder=tk.StringVar()
     dry_run=tk.BooleanVar(value=True)
+    recursive=tk.BooleanVar(value=False)
+    offline=tk.BooleanVar(value=False)
     progress=tk.DoubleVar(value=0)
     work_queue=queue.Queue()
     frame=ttk.Frame(root,padding=14)
@@ -24,23 +26,29 @@ def main():
     ttk.Button(frame,text="Browse",command=lambda:folder.set(filedialog.askdirectory())).grid(row=0,column=2)
     ttk.Checkbutton(frame,text="Dry run (preview only; no files moved)",variable=dry_run).grid(
         row=1,column=0,columnspan=3,sticky="w",pady=10)
+    toggles=ttk.Frame(frame)
+    toggles.grid(row=2,column=0,columnspan=3,sticky="w")
+    ttk.Checkbutton(toggles,text="Scan subfolders",variable=recursive).pack(side="left",padx=(0,14))
+    ttk.Checkbutton(toggles,text="Offline (cache only)",variable=offline).pack(side="left")
     bar=ttk.Progressbar(frame,maximum=100,variable=progress)
-    bar.grid(row=2,column=0,columnspan=3,sticky="ew",pady=6)
+    bar.grid(row=3,column=0,columnspan=3,sticky="ew",pady=6)
     log=tk.Text(frame,wrap="word",height=15)
-    log.grid(row=3,column=0,columnspan=3,sticky="nsew")
-    frame.rowconfigure(3,weight=1)
+    log.grid(row=4,column=0,columnspan=3,sticky="nsew")
+    frame.rowconfigure(4,weight=1)
     status=tk.StringVar(value="Ready")
-    ttk.Label(frame,textvariable=status).grid(row=4,column=0,columnspan=3,sticky="w")
+    ttk.Label(frame,textvariable=status).grid(row=5,column=0,columnspan=3,sticky="w")
     start=ttk.Button(frame,text="Preview organization")
-    start.grid(row=5,column=0,columnspan=3,pady=10)
+    start.grid(row=6,column=0,columnspan=3,pady=10)
 
     def append(message):
         log.insert("end",message+"\n")
         log.see("end")
 
-    def worker(path,preview):
+    def worker(path,preview,scan_subfolders,cache_only):
         try:
-            stats=organize(Path(path),dry_run=preview,on_progress=lambda e:work_queue.put(("progress",e)))
+            stats=organize(Path(path),dry_run=preview,
+                           recursive=scan_subfolders,offline=cache_only,
+                           on_progress=lambda e:work_queue.put(("progress",e)))
             work_queue.put(("done",stats))
         except Exception as exc:
             work_queue.put(("error",str(exc)))
@@ -56,7 +64,9 @@ def main():
         progress.set(0)
         start.configure(state="disabled")
         status.set("Working...")
-        threading.Thread(target=worker,args=(folder.get(),dry_run.get()),daemon=True).start()
+        threading.Thread(target=worker,
+                         args=(folder.get(),dry_run.get(),recursive.get(),offline.get()),
+                         daemon=True).start()
 
     def poll():
         try:

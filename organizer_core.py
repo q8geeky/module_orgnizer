@@ -70,19 +70,37 @@ def unique_destination(folder: Path, filename: str) -> Path:
         i+=1
 
 
-def organize(folder: Path, *, dry_run=True, on_progress: Callable=lambda event:None,
+def organize(folder: Path, *, dry_run=True, recursive=False, offline=False,
+             on_progress: Callable=lambda event:None,
              resolver=detect_model_type) -> dict:
     """Only move when the hash is resolved to a recognized category.
 
-    No recursion, no overwrites. Cache keys are hashes (not stale filenames).
+    No overwrites. Recursion is explicitly opt-in, skips category folders,
+    preserves relative subfolders, and never follows symbolic-directory links.
+    Cache entries are keyed by content SHA-256, not stale filenames.
     """
     folder=Path(folder).expanduser().resolve()
     if not folder.is_dir():
         raise ValueError("Select an existing directory.")
     cache_path=folder/".module_organizer_cache.json"
     cache=load_cache(cache_path)
-    files=sorted((p for p in folder.iterdir() if p.is_file()
-                  and p.suffix.lower() in EXTENSIONS),key=lambda p:p.name.lower())
+    if recursive:
+        # Never scan existing target folders or follow symbolic directory links.
+        files = []
+        for base, directories, names in os.walk(folder, followlinks=False):
+            directories[:] = [
+                d for d in directories
+                if d not in CATEGORIES and not d.startswith(".")
+                and not (Path(base) / d).is_symlink()
+            ]
+            files.extend(
+                Path(base) / name for name in names
+                if Path(name).suffix.lower() in EXTENSIONS
+            )
+    else:
+        files = [p for p in folder.iterdir()
+                 if p.is_file() and p.suffix.lower() in EXTENSIONS]
+    files.sort(key=lambda p: str(p.relative_to(folder)).casefold())
     stats={"found":len(files),"moved":0,"planned":0,"unresolved":0,"errors":0}
     for i,p in enumerate(files,1):
         try:
@@ -91,7 +109,7 @@ def organize(folder: Path, *, dry_run=True, on_progress: Callable=lambda event:N
                 raise ValueError("Refusing symlink or oversized model.")
             digest=sha256_file(p)
             category=cache.get(digest)
-            if category not in CATEGORIES:
+            if category not in CATEGORIES and not offline:
                 category=resolver(digest)
                 if category in CATEGORIES:
                     cache[digest]=category
@@ -99,15 +117,19 @@ def organize(folder: Path, *, dry_run=True, on_progress: Callable=lambda event:N
                 stats["unresolved"]+=1
                 on_progress((i,len(files),p.name,"Unknown type: left in place"))
                 continue
-            destination=unique_destination(folder/category,p.name)
+            relative = p.relative_to(folder)
+            target = folder / category / relative
+            destination=unique_destination(target.parent,target.name)
             if dry_run:
                 stats["planned"]+=1
-                on_progress((i,len(files),p.name,f"Would move -> {category}/{destination.name}"))
+                on_progress((i,len(files),str(relative),
+                             f"Would move -> {destination.relative_to(folder)}"))
             else:
-                destination.parent.mkdir(exist_ok=True)
+                destination.parent.mkdir(parents=True,exist_ok=True)
                 shutil.move(str(p),str(destination))
                 stats["moved"]+=1
-                on_progress((i,len(files),p.name,f"Moved -> {category}/{destination.name}"))
+                on_progress((i,len(files),str(relative),
+                             f"Moved -> {destination.relative_to(folder)}"))
         except (OSError,ValueError) as exc:
             stats["errors"]+=1
             on_progress((i,len(files),p.name,f"Error: {exc}"))

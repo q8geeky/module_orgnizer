@@ -1,32 +1,58 @@
 # Civitai Model Organizer
 
-Desktop tool for sorting local Civitai model files by their model-version SHA-256 hash. Supports Checkpoint, TextualInversion, LORA, VAE and LoCon.
+A cautious desktop and command-line sorter for model files recognized by Civitai's model-version SHA-256 endpoint.
 
-## Quick start
+## Features
 
-Install Python 3.10+ with Tkinter:
+- Works with Checkpoint, TextualInversion, LORA, VAE and LoCon.
+- Previews every move before touching files (the default).
+- Hashes local model bytes, not just filenames; cached classifications cannot be reused for different content.
+- Handles destination name collisions without overwriting.
+- Optional **Scan subfolders**, preserving paths under the category folder and skipping already-sorted folders.
+- Optional **Offline mode**, which looks up known hashes only in the local cache.
+- CLI with structured JSON report for use in scripts, dashboards or scheduled batch jobs.
+- Tk GUI remains responsive during hashing/network lookup.
+
+## Install
+
+Python 3.10+ with Tkinter and requests:
 
 ```sh
 python -m pip install -r requirements.txt
 python civitai_modules_orgnizer_v1.py
 ```
 
-Choose a folder, preview changes with **Dry run** (enabled by default), then uncheck it and confirm to move files. Files with unrecognized metadata remain untouched. The tool searches the *top level* of the folder, not subfolders.
+## Headless CLI
 
-## Safety improvements
+Preview without moving:
 
-- UI updates are sent through a thread-safe queue; requests/hashing run in the worker.
-- Cache is keyed by content SHA-256, never basename, so overwritten files cannot inherit stale classifications.
-- Requests have a 15-second timeout; unknown/unavailable API responses leave files untouched.
-- Colliding destination names receive numeric suffixes; files are never overwritten.
-- No folders are created during preview.
-- SHA hashing is streamed in 1 MiB blocks.
-- Successful cache entries are stored in `.module_organizer_cache.json` using atomic replacement.
+```sh
+python organize_models.py "/path/to/models" --recursive
+```
 
-Network access is needed for previously unseen hashes. Check classifications in the preview: model-type labels depend on the service's current metadata.
+Preview without HTTP:
 
-## Tests
+```sh
+python organize_models.py "/path/to/models" --recursive --offline --json
+```
+
+Move recognized files (requires **both** flags):
+
+```sh
+python organize_models.py "/path/to/models" --recursive --apply --yes
+```
+
+**Important:** Recursive mode moves `models/subfolder/name.safetensors` into
+`LORA/models/subfolder/name.safetensors` under the selected root. The old source tree is otherwise preserved; empty directories are not removed. Existing category folders are skipped in recursive scans.
+
+A previously unseen hash in offline mode is reported as unresolved; the file remains untouched. Preview does not populate the persistent cache. The API may fail or return unsupported categories, in which case files remain in place.
+
+For safety, do a dry run and review the summary before applying to real model libraries. Keeping a backup is recommended.
+
+## Testing
 
 ```sh
 python -m unittest discover -s tests -v
 ```
+
+No network access is required by the tests. CI checks Python 3.10, 3.12 and 3.13.
